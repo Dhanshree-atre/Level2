@@ -126,6 +126,11 @@ midnight-counter/
 
 ## Screenshots
 
+<img width="1917" height="1135" alt="Screenshot 2026-08-13 175939" src="https://github.com/user-attachments/assets/92f34c08-96f6-49f0-b947-6748bdae9f5e" />
+<img width="1600" height="966" alt="image" src="https://github.com/user-attachments/assets/7978903b-665f-466b-9498-080685b42821" />
+
+
+
 
 
 ---
