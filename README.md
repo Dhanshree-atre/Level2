@@ -1,138 +1,151 @@
 # Midnight Counter
 
-> A privacy-preserving counter smart contract on the Midnight Network, demonstrating public ledger state, private ZK witnesses, and deliberate use of `disclose()`.
+> A privacy-preserving ZK dApp on Midnight Network — increment an on-chain counter while keeping your input completely private via zero-knowledge proofs.
+
+## Live Demo
+
+[https://level2-ten.vercel.app/](https://level2-ten.vercel.app/)
 
 ## Contract Address
 
-| Network  | Address                                                            |
-|----------|--------------------------------------------------------------------|
-| Preview  | `76a1f26ef78965e7180d51b050c911904ece4bb2d2ca876c2bdabaaacde5e01e` |
-| Preprod  | mn_addr_preview1d7j37az8m5h6sgs3c6ufvwtg0cxxhtpdnh6yuve5cpkjjk8v8ersrsmfnx                                       |
+| Network  | Address                                                              |
+|----------|----------------------------------------------------------------------|
+| Preprod  | `76a1f26ef78965e7180d51b050c911904ece4bb2d2ca876c2bdabaaacde5e01e` |
 
 ## What This Does
 
-This contract implements a counter that lives on the Midnight blockchain. Users can increment the counter, reset it, or perform conditional increments — but the **amount** of each increment is kept completely private.
+This dApp connects to a Midnight Preprod smart contract that implements a privacy-preserving counter. Users can:
 
-The contract demonstrates Midnight's core privacy model: the on-chain ledger only stores the running total, while the increment amounts are proven valid via zero-knowledge proofs without ever being revealed to anyone on the network.
+- **Connect** their Lace wallet to the Midnight Preprod network
+- **Call the `increment` circuit** — which generates a zero-knowledge proof locally in the browser using `@midnight-ntwrk/midnight-js-network-provider` and the wallet's built-in proving provider
+- **Submit the proof on-chain** — only the new counter total is disclosed; the private increment amount is never revealed
+
+The Midnight.js SDK (`@midnight-ntwrk/midnight-js-network-provider`) is used to:
+- Configure the Preprod network endpoints (`ServiceUriConfig`)
+- Connect to the Midnight node via `NetworkProvider`
+- Query on-chain contract state via `IndexerClient`
+- Coordinate proof generation via the wallet's `getProvingProvider()` API
 
 ## Privacy Model
 
 ### What is PUBLIC (on-chain, visible to anyone):
 - The current counter value (`count`) — stored in the ledger, queryable by anyone
-- The fact that an increment or reset transaction occurred
+- The fact that an increment transaction occurred
 - The transaction hash and block it was included in
 
 ### What is PRIVATE (private witness, never on-chain):
-- `get_increment_amount()` — the exact amount used in `increment()`
-- `get_secret_amount()` — the amount used in `increment_if_positive()`
-- These values live only in the prover's local environment (TypeScript/JS)
+- `get_increment_amount()` — the exact amount used in `increment()`, generated locally inside the ZK proof engine
+- This value lives only in the prover's local WASM environment — it is never transmitted, logged, or shown in the UI
 
 ### What the user PROVES without revealing:
 - That `incrementAmount > 0` and `incrementAmount <= 1000` (via ZK proof)
-- That `secretAmount > 0` and `secretAmount <= 100` (via ZK proof)
 - The resulting new counter total is disclosed (via `disclose()`) so the chain can validate the state update
-- The actual private values are **never transmitted, stored, or revealed**
+- The actual private value is **never transmitted, stored, or revealed**
 
-### Why `disclose()` is used deliberately:
-Compact's compiler **requires** `disclose()` to move any witness-derived data into the public ledger. This is a compile-time safety mechanism — it prevents accidental leaks of private data. Using `disclose()` is an explicit, intentional choice to publish a derived result.
+## Privacy Claim
+
+**An on-chain observer CAN see:**
+- That a counter increment transaction occurred
+- The new counter total after the increment
+- The transaction hash and block number
+
+**An on-chain observer CANNOT see:**
+- The amount by which the counter was incremented
+- Any information about the user's private witness value
+- The inputs to the ZK circuit
+
+The Midnight protocol's ZK proof system mathematically guarantees that the increment amount remains private — even the blockchain nodes processing the transaction cannot learn the private input.
 
 ## Tech Stack
 
-- **Midnight Network** — Privacy-focused blockchain with ZK proofs
-- **Compact Language** — Smart contract language compiling to ZK circuits
-- **Node.js v22** — Runtime for tests and SDK
-- **Docker** — Required to run the proof server locally
-- **TypeScript** — Used in the test suite
+- **Midnight Network** — Privacy-focused blockchain with native ZK proofs
+- **Compact** — Smart contract language compiling to ZK circuits
+- **`@midnight-ntwrk/midnight-js-network-provider`** — Midnight.js SDK: `NetworkProvider`, `IndexerClient`, `ServiceUriConfig`
+- **`@midnight-ntwrk/dapp-connector-api`** — Lace wallet DApp connector (v4)
+- **React + Vite** — Frontend with in-browser WASM proof generation
+- **Lace wallet** — Midnight DApp connector for wallet connect + proving
+- **TypeScript** — Full type-safety
+- **Vercel** — Hosting with COOP/COEP headers for SharedArrayBuffer
 
 ## Prerequisites
 
-Before running locally, ensure you have:
+- **Lace wallet** installed with Midnight DApp Connector enabled
+  1. Install from [lace.io](https://www.lace.io/)
+  2. Open Lace → Settings → DApps → enable **Midnight DApp Connector**
+  3. Switch to **Midnight Preprod** network
+- **Node.js v22+** — [nodejs.org](https://nodejs.org/)
 
-1. **WSL2 (Windows)** or a Linux/macOS machine
-2. **Node.js v22+** — [Download](https://nodejs.org/)
-3. **Docker Desktop** — [Download](https://www.docker.com/products/docker-desktop/)
-4. **Compact Compiler** — Install via:
-   ```bash
-   curl --proto '=https' --tlsv1.2 -LsSf https://github.com/midnightntwrk/compact/releases/latest/download/compact-installer.sh | sh
-   compact update
-   ```
-
-## Setup
+## Run Locally
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/midnight-counter.git
-cd midnight-counter
+git clone https://github.com/Dhanshree-atre/Level2.git
+cd Level2
 
 # 2. Install dependencies
+#    @midnight-ntwrk packages install from https://npm.midnight.network/
 npm install
 
-# 3. Compile the Compact contract
-# On WSL2/Linux/macOS:
-compact compile contracts/counter.compact managed
+# 3. Start the development server
+npm run dev
 
-# 4. Start the proof server (required for ZK proof generation)
-docker run -p 6300:6300 midnightntwrk/proof-server:latest
+# 4. Open http://localhost:5173
+#    Make sure Lace is installed and set to Midnight Preprod
 ```
 
-## Run Tests
+### Build for production
 
 ```bash
-# Run the full test suite (10 tests covering circuit logic, state transitions, privacy)
-npm test
+npm run build
+# Output: dist/
 ```
 
-Expected output:
-```
-  Counter Contract — Circuit Logic Tests
-    ✓ increment circuit accepts valid positive amounts
-    ✓ increment circuit rejects zero amount (assertion check)
-    ✓ increment circuit rejects amounts over 1000
+## Deploy to Vercel
 
-  Counter Contract — State Transition Tests
-    ✓ counter initializes to zero (constructor)
-    ✓ multiple increments accumulate the correct total
-    ✓ reset circuit returns counter to zero
-    ✓ increment_if_positive correctly updates state
-
-  Counter Contract — Privacy Guarantee Tests
-    ✓ private witness amount is NOT in the disclosed output
-    ✓ failed increment_if_positive does not modify public state
-    ✓ witness function encapsulates private data — value inaccessible externally
-
-Tests: 10 passed, 10 total
+```bash
+npm install -g vercel
+vercel login
+vercel --prod
 ```
 
-## Contract Structure
+The `vercel.json` configures:
+- SPA rewrites (all routes → `index.html`)
+- `Cross-Origin-Opener-Policy: same-origin`
+- `Cross-Origin-Embedder-Policy: require-corp`
+
+These headers are required for `SharedArrayBuffer` used by the in-browser WASM ZK proof engine.
+
+## File Structure
 
 ```
-midnight-counter/
+Level2/
 ├── contracts/
-│   └── counter.compact          ← Compact smart contract
-├── managed/                     ← Auto-generated by compact compile
+│   └── counter.compact          ← Compact smart contract (ZK circuits)
+├── managed/                     ← Compiled by: compact compile contracts/counter.compact managed
 │   ├── contract/index.js        ← Contract JS bindings
 │   ├── keys/                    ← ZK proving & verifying keys
 │   └── zkir/                    ← ZK intermediate representation
-├── src/                         ← Frontend (added in Level 2)
-├── tests/
-│   └── counter.test.ts          ← Test suite (10 tests)
-├── .github/
-│   └── workflows/               ← CI/CD (added in Level 3)
-├── README.md
+├── src/
+│   ├── components/
+│   │   ├── WalletConnect.tsx    ← Lace wallet connect/disconnect UI
+│   │   └── CircuitCall.tsx      ← ZK circuit call + result display
+│   ├── hooks/
+│   │   └── useMidnight.ts       ← Midnight.js SDK hook (NetworkProvider + IndexerClient)
+│   ├── types/
+│   │   └── midnight-network-provider.d.ts  ← Type declarations for SDK
+│   ├── App.tsx
+│   ├── main.tsx
+│   └── index.css
+├── vercel.json                  ← COOP/COEP headers for WASM
+├── .npmrc                       ← Points @midnight-ntwrk to npm.midnight.network
 ├── package.json
-└── tsconfig.json
+└── README.md
 ```
 
+## Demo Video
 
-## Screenshots
-
-<img width="1917" height="1135" alt="Screenshot 2026-08-13 175939" src="https://github.com/user-attachments/assets/92f34c08-96f6-49f0-b947-6748bdae9f5e" />
-<img width="1600" height="966" alt="image" src="https://github.com/user-attachments/assets/7978903b-665f-466b-9498-080685b42821" />
-
-
-
-
+[PLACEHOLDER — I will add the link after recording]
 
 ---
 
-
+Built for the **Midnight Builder Challenge — Level 2** · [Midnight Network](https://midnight.network)
